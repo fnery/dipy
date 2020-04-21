@@ -791,7 +791,11 @@ def _btensor_to_bdelta_2d(btens_2d, ztol=1e-10):
         lambda_yy = evals_zzxxyy[1]
 
         bdelta = (1/(3*lambda_iso))*(lambda_zz-((lambda_yy+lambda_xx)/2))
-        b_eta = (lambda_yy-lambda_xx)/(2*lambda_iso*bdelta+np.spacing(1))
+
+        if lambda_yy-lambda_xx < ztol:
+            b_eta = 0
+        else:
+            b_eta = (lambda_yy-lambda_xx)/(2*lambda_iso*bdelta+np.spacing(1))
 
         if np.abs(bval) < ztol:
             bval = 0

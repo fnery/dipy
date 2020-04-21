@@ -606,7 +606,6 @@ def test_btensor_to_bdelta():
                 bdeltas[i] = i_bdelta
                 bvals[i] = i_bval
                 b_etas[i] = i_b_eta
-                a = 1
 
             npt.assert_array_almost_equal(bdeltas, expected_bdeltas)
             npt.assert_array_almost_equal(bvals, ebs)
