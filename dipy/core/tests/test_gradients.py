@@ -518,6 +518,7 @@ def test_btensor_to_bdelta():
 
     expected_bdeltas = np.array([1, -0.5, 0, 0.5])
     expected_bvals = np.array([1, 1, 1, 1])
+    expected_b_etas = np.array([0, 0, 0, 0])
 
     # Baseline tensors to test
     linear_tensor = np.array([[1, 0, 0],
@@ -544,16 +545,19 @@ def test_btensor_to_bdelta():
     # Pre-allocate
     bdeltas = np.empty(n_base_tensors)
     bvals = np.empty(n_base_tensors)
+    b_etas = np.empty(n_base_tensors)
 
     # Loop through each tensor type and check results
     for i, tensor in enumerate(base_tensors):
-        i_bdelta, i_bval = btensor_to_bdelta(tensor)
+        i_bdelta, i_bval, i_b_eta = btensor_to_bdelta(tensor)
 
         bdeltas[i] = i_bdelta
         bvals[i] = i_bval
+        b_etas[i] = i_b_eta
 
     npt.assert_array_almost_equal(bdeltas, expected_bdeltas)
     npt.assert_array_almost_equal(bvals, expected_bvals)
+    npt.assert_array_almost_equal(b_etas, expected_b_etas)
 
     # Test function on a 3D input
     base_tensors_array = np.empty((4, 3, 3))
@@ -562,10 +566,11 @@ def test_btensor_to_bdelta():
     base_tensors_array[2, :, :] = spherical_tensor
     base_tensors_array[3, :, :] = cigar_tensor
 
-    bdeltas, bvals = btensor_to_bdelta(base_tensors_array)
+    bdeltas, bvals, b_etas = btensor_to_bdelta(base_tensors_array)
 
     npt.assert_array_almost_equal(bdeltas, expected_bdeltas)
     npt.assert_array_almost_equal(bvals, expected_bvals)
+    npt.assert_array_almost_equal(b_etas, expected_b_etas)
 
     # -----------------------------------------------------
     # Test function after rotating+scaling baseline tensors
@@ -590,18 +595,22 @@ def test_btensor_to_bdelta():
             # Pre-allocate
             bdeltas = np.empty(n_base_tensors)
             bvals = np.empty(n_base_tensors)
+            b_etas = np.empty(n_base_tensors)
 
             # Rotate each of the baseline test tensors and check results
             for i, tensor in enumerate(base_tensors):
 
                 tensor_rot_i = np.matmul(np.matmul(R_i, tensor), R_i.T)
-                i_bdelta, i_bval = btensor_to_bdelta(tensor_rot_i*scale)
+                i_bdelta, i_bval, i_b_eta = btensor_to_bdelta(tensor_rot_i*scale)
 
                 bdeltas[i] = i_bdelta
                 bvals[i] = i_bval
+                b_etas[i] = i_b_eta
+                a = 1
 
             npt.assert_array_almost_equal(bdeltas, expected_bdeltas)
             npt.assert_array_almost_equal(bvals, ebs)
+            npt.assert_array_almost_equal(b_etas, expected_b_etas)
 
     # Input can't be string
     npt.assert_raises(ValueError, btensor_to_bdelta, 'LTE')

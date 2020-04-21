@@ -791,6 +791,7 @@ def _btensor_to_bdelta_2d(btens_2d, ztol=1e-10):
         lambda_yy = evals_zzxxyy[1]
 
         bdelta = (1/(3*lambda_iso))*(lambda_zz-((lambda_yy+lambda_xx)/2))
+        b_eta = (lambda_yy-lambda_xx)/(2*lambda_iso*bdelta+np.spacing(1))
 
         if np.abs(bval) < ztol:
             bval = 0
@@ -798,7 +799,10 @@ def _btensor_to_bdelta_2d(btens_2d, ztol=1e-10):
         if np.abs(bdelta) < ztol:
             bdelta = 0
 
-    return float(bdelta), float(bval)
+        if np.abs(b_eta) < ztol:
+            b_eta = 0
+
+    return float(bdelta), float(bval), float(b_eta)
 
 def btensor_to_bdelta(btens):
     r"""Compute anisotropy of b-tensor(s)
@@ -854,14 +858,16 @@ def btensor_to_bdelta(btens):
     n_btens = btens.shape[0]
     bdelta = np.empty(n_btens)
     bval = np.empty(n_btens)
+    b_eta = np.empty(n_btens)
 
     # Loop over b-tensor(s)
     for i in range(btens.shape[0]):
         i_btens = btens[i, :, :]
-        i_bdelta, i_bval = _btensor_to_bdelta_2d(i_btens)
+        i_bdelta, i_bval, i_b_eta = _btensor_to_bdelta_2d(i_btens)
         bdelta[i] = i_bdelta
         bval[i] = i_bval
+        b_eta[i] = i_b_eta
 
     bdelta = bdelta.round(decimals=6)
 
-    return bdelta, bval
+    return bdelta, bval, b_eta
