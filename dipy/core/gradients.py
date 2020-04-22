@@ -772,9 +772,10 @@ def _btensor_to_bdelta_2d(btens_2d, ztol=1e-10):
     Chemistry, Cambridge, UK, 2016.
 
     """
+    btens_2d[abs(btens_2d)<ztol] = 0
+    
     evals = np.real(np.linalg.eig(btens_2d)[0])
     bval = np.sum(evals)
-
     bval_is_zero = bval < ztol
 
     if bval_is_zero:
@@ -791,11 +792,7 @@ def _btensor_to_bdelta_2d(btens_2d, ztol=1e-10):
         lambda_yy = evals_zzxxyy[1]
 
         bdelta = (1/(3*lambda_iso))*(lambda_zz-((lambda_yy+lambda_xx)/2))
-
-        if lambda_yy-lambda_xx < ztol:
-            b_eta = 0
-        else:
-            b_eta = (lambda_yy-lambda_xx)/(2*lambda_iso*bdelta+np.spacing(1))
+        b_eta = (lambda_yy-lambda_xx)/(2*lambda_iso*bdelta+np.spacing(1))
 
         if np.abs(bval) < ztol:
             bval = 0
@@ -833,7 +830,7 @@ def btensor_to_bdelta(btens):
     >>> lte = np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]])
     >>> bdelta, bval = btensor_to_bdelta(lte)
     >>> print("bdelta={}; bval={}".format(bdelta[0], bval[0]))
-    bdelta=1.0; bval=1.0
+    bdelta=1.0; bval=1.
 
     """
     # Bad input checks
@@ -875,3 +872,146 @@ def btensor_to_bdelta(btens):
     bdelta = bdelta.round(decimals=6)
 
     return bdelta, bval, b_eta
+
+
+
+def _btens_to_ss_2d(btens_2d, ztol=1e-10):
+    """Compute size and shape parameters a single b-tensor
+
+    Auxiliary function where calculation of `bval`, bdelta` and `b_eta` from a
+    (3,3) b-tensor takes place. The main function `btens_to_ss` then wraps
+    around this to enable support of input (N, 3, 3) arrays, where N = number of
+    b-tensors
+
+    Parameters
+    ----------
+    btens_2d : (3, 3) numpy.ndarray
+        input b-tensor
+    ztol : float
+        Any parameters smaller than this value are considered to be 0
+
+    Returns #TODO ensure order OK, i.e. now bval appears first
+    -------
+    bval: float
+        b-value
+    bdelta: float
+        normalized tensor anisotropy
+    bdelta: float
+        tensor assymetry
+
+    Notes
+    -----
+    Implementation following [1].
+
+    References
+    ----------
+    .. [1] D. Topgaard, NMR methods for studying microscopic diffusion
+    anisotropy, in: R. Valiullin (Ed.), Diffusion NMR of Confined Systems: Fluid
+    Transport in Porous Solids and Heterogeneous Materials, Royal Society of
+    Chemistry, Cambridge, UK, 2016.
+
+    """
+
+    btens_2d[abs(btens_2d)<ztol] = 0
+
+    evals = np.real(np.linalg.eig(btens_2d)[0])
+    bval = np.sum(evals)
+    bval_is_zero = bval < ztol
+
+    if bval_is_zero:
+        bdelta = 0
+        bval = 0
+    else:
+        lambda_iso = (1/3)*bval
+
+        diff_lambdas = np.abs(evals - lambda_iso)
+        evals_zzxxyy = evals[np.argsort(diff_lambdas)[::-1]]
+
+        lambda_zz = evals_zzxxyy[0]
+        lambda_xx = evals_zzxxyy[2]
+        lambda_yy = evals_zzxxyy[1]
+
+        bdelta = (1/(3*lambda_iso))*(lambda_zz-((lambda_yy+lambda_xx)/2))
+        b_eta = (lambda_yy-lambda_xx)/(2*lambda_iso*bdelta+np.spacing(1))
+
+        if np.abs(bval) < ztol:
+            bval = 0
+
+        if np.abs(bdelta) < ztol:
+            bdelta = 0
+
+        if np.abs(b_eta) < ztol:
+            b_eta = 0
+
+    return float(bdelta), float(bval), float(b_eta)
+
+def btens_to_ss(btens):
+    r"""Compute size and shape parameters of b-tensor(s)
+
+    Parameters
+    ----------
+    btens : (3, 3) OR (N, 3, 3) numpy.ndarray
+        input b-tensor, or b-tensors, where N = number of b-tensors
+
+    Returns
+    -------
+    bval: numpy.ndarray
+        b-value(s)
+    bdelta: numpy.ndarray
+        normalized tensor anisotropy(s)
+    b_eta: numpy.ndarray
+        tensor assymetry(s)
+
+    Notes
+    -----
+    This function can be used to get size and shape parameters from the
+    tensor(s) in the GradientTable btens attribute.
+
+    Examples
+    --------
+    >>> lte = np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]])#TODO:examples
+    >>> bdelta, bval = btensor_to_bdelta(lte)
+    >>> print("bdelta={}; bval={}".format(bdelta[0], bval[0]))
+    bdelta=1.0; bval=1.
+
+    """
+    # Bad input checks
+    value_error_msg = "`btens` must be a 2D or 3D numpy array, respectively" \
+                      " with (3, 3) or (N, 3, 3) shape, where N corresponds" \
+                      " to the number of b-tensors"
+    if not isinstance(btens, np.ndarray):
+        raise ValueError(value_error_msg)
+
+    nd = np.ndim(btens)
+    if nd == 2:
+        btens_shape = btens.shape
+    elif nd == 3:
+        btens_shape = btens.shape[1:]
+    else:
+        raise ValueError(value_error_msg)
+
+    if not btens_shape == (3, 3):
+        raise ValueError(value_error_msg)
+
+    # Reshape so that loop below works when only one input b-tensor is provided
+    if nd == 2:
+        btens = btens.reshape((1, 3, 3))
+
+    # Pre-allocate
+    n_btens = btens.shape[0]
+    bval = np.empty(n_btens)
+    bdelta = np.empty(n_btens)
+    b_eta = np.empty(n_btens)
+
+    # Loop over b-tensor(s)
+    for i in range(btens.shape[0]):
+        i_btens = btens[i, :, :]
+        i_bval, i_bdelta, i_b_eta = _btens_to_ss_2d(i_btens)
+        bval[i] = i_bval
+        bdelta[i] = i_bdelta
+        b_eta[i] = i_b_eta
+
+    bdelta = bdelta.round(decimals=6)
+    b_eta = b_eta.round(decimals=6)
+
+    return bval, bdelta, b_eta

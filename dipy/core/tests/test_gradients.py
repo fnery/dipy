@@ -11,7 +11,7 @@ from dipy.core.gradients import (gradient_table, GradientTable,
                                  WATER_GYROMAGNETIC_RATIO,
                                  reorient_bvecs, generate_bvecs,
                                  check_multi_b, round_bvals, unique_bvals,
-                                 btensor_to_bdelta)
+                                 btensor_to_bdelta, btens_to_ss) #TODO remove btensor_to_bdelta?
 from dipy.io.gradients import read_bvals_bvecs
 from dipy.core.geometry import vec2vec_rotmat
 
@@ -542,22 +542,21 @@ def test_btensor_to_bdelta():
     # Test function on baseline tensors
     # ---------------------------------
 
-    # Pre-allocate
-    bdeltas = np.empty(n_base_tensors)
-    bvals = np.empty(n_base_tensors)
-    b_etas = np.empty(n_base_tensors)
+    # # Pre-allocate
+    # bdeltas = np.empty(n_base_tensors)
+    # bvals = np.empty(n_base_tensors)
+    # b_etas = np.empty(n_base_tensors)
 
     # Loop through each tensor type and check results
     for i, tensor in enumerate(base_tensors):
         i_bdelta, i_bval, i_b_eta = btensor_to_bdelta(tensor)
 
-        bdeltas[i] = i_bdelta
-        bvals[i] = i_bval
-        b_etas[i] = i_b_eta
-
-    npt.assert_array_almost_equal(bdeltas, expected_bdeltas)
-    npt.assert_array_almost_equal(bvals, expected_bvals)
-    npt.assert_array_almost_equal(b_etas, expected_b_etas)
+        # bdeltas[i] = i_bdelta
+        # bvals[i] = i_bval
+        # b_etas[i] = i_b_eta
+        npt.assert_array_almost_equal(i_bdelta, expected_bdeltas[i])
+        npt.assert_array_almost_equal(i_bval, expected_bvals[i])
+        npt.assert_array_almost_equal(i_b_eta, expected_b_etas[i])
 
     # Test function on a 3D input
     base_tensors_array = np.empty((4, 3, 3))
@@ -603,13 +602,9 @@ def test_btensor_to_bdelta():
                 tensor_rot_i = np.matmul(np.matmul(R_i, tensor), R_i.T)
                 i_bdelta, i_bval, i_b_eta = btensor_to_bdelta(tensor_rot_i*scale)
 
-                bdeltas[i] = i_bdelta
-                bvals[i] = i_bval
-                b_etas[i] = i_b_eta
-
-            npt.assert_array_almost_equal(bdeltas, expected_bdeltas)
-            npt.assert_array_almost_equal(bvals, ebs)
-            npt.assert_array_almost_equal(b_etas, expected_b_etas)
+                npt.assert_array_almost_equal(i_bdelta, expected_bdeltas[i])
+                npt.assert_array_almost_equal(i_bval, ebs[i])
+                npt.assert_array_almost_equal(i_b_eta, expected_b_etas[i])
 
     # Input can't be string
     npt.assert_raises(ValueError, btensor_to_bdelta, 'LTE')
@@ -625,6 +620,126 @@ def test_btensor_to_bdelta():
     npt.assert_raises(ValueError, btensor_to_bdelta, np.zeros((4, 4)))
     npt.assert_raises(ValueError, btensor_to_bdelta, np.zeros((2, 2, 2)))
 
+def test_btens_to_ss():
+    """
+    Checks if size and shape parameters are as expected for 4 b-tensor shapes
+    (LTE, PTE, STE, CTE) as well as scaled and rotated versions of them
+
+    This function intrinsically tests the function `_btens_to_ss_2d` as
+    `_btens_to_ss_2d` is only meant to be called by `btens_to_ss`
+
+    """
+    n_rotations = 30
+    n_scales = 3
+
+    expected_bvals = np.array([1, 1, 1, 1])
+    expected_bdeltas = np.array([1, -0.5, 0, 0.5])
+    expected_b_etas = np.array([0, 0, 0, 0])
+
+    # Baseline tensors to test
+    linear_tensor = np.array([[1, 0, 0],
+                              [0, 0, 0],
+                              [0, 0, 0]])
+    planar_tensor = np.array([[0, 0, 0],
+                              [0, 1, 0],
+                              [0, 0, 1]]) / 2
+    spherical_tensor = np.array([[1, 0, 0],
+                                 [0, 1, 0],
+                                 [0, 0, 1]]) / 3
+    cigar_tensor = np.array([[2, 0, 0],
+                             [0, .5, 0],
+                             [0, 0, .5]]) / 3
+
+    base_tensors = [linear_tensor, planar_tensor,
+                    spherical_tensor, cigar_tensor]
+    n_base_tensors = len(base_tensors)
+
+    # ---------------------------------
+    # Test function on baseline tensors
+    # ---------------------------------
+
+    # Pre-allocate
+    bvals = np.empty(n_base_tensors)
+    bdeltas = np.empty(n_base_tensors)
+    b_etas = np.empty(n_base_tensors)
+
+    # Loop through each tensor type and check results
+    for i, tensor in enumerate(base_tensors):
+        i_bval, i_bdelta, i_b_eta = btens_to_ss(tensor)
+
+        bvals[i] = i_bval
+        bdeltas[i] = i_bdelta
+        b_etas[i] = i_b_eta
+
+    npt.assert_array_almost_equal(bvals, expected_bvals)
+    npt.assert_array_almost_equal(bdeltas, expected_bdeltas)
+    npt.assert_array_almost_equal(b_etas, expected_b_etas)
+
+    # Test function on a 3D input
+    base_tensors_array = np.empty((4, 3, 3))
+    base_tensors_array[0, :, :] = linear_tensor
+    base_tensors_array[1, :, :] = planar_tensor
+    base_tensors_array[2, :, :] = spherical_tensor
+    base_tensors_array[3, :, :] = cigar_tensor
+
+    bvals, bdeltas, b_etas = btens_to_ss(base_tensors_array)
+
+    npt.assert_array_almost_equal(bvals, expected_bvals)
+    npt.assert_array_almost_equal(bdeltas, expected_bdeltas)
+    npt.assert_array_almost_equal(b_etas, expected_b_etas)
+
+    # -----------------------------------------------------
+    # Test function after rotating+scaling baseline tensors
+    # -----------------------------------------------------
+
+    scales = np.concatenate((np.array([1]), np.random.random(n_scales)))
+
+    for scale in scales:
+
+        ebs = expected_bvals*scale
+
+        # Generate `n_rotations` random 3-element vectors of norm 1
+        v = np.random.random((n_rotations, 3))-0.5
+        u = np.apply_along_axis(lambda w: w/np.linalg.norm(w), axis=1, arr=v)
+
+        for rot_idx in range(n_rotations):
+
+            # Get rotation matrix for current iteration
+            u_i = u[rot_idx, :]
+            R_i = vec2vec_rotmat(np.array([1, 0, 0]), u_i)
+
+            # Pre-allocate
+            bvals = np.empty(n_base_tensors)
+            bdeltas = np.empty(n_base_tensors)
+            b_etas = np.empty(n_base_tensors)
+
+            # Rotate each of the baseline test tensors and check results
+            for i, tensor in enumerate(base_tensors):
+
+                tensor_rot_i = np.matmul(np.matmul(R_i, tensor), R_i.T)
+                i_bval, i_bdelta, i_b_eta = btens_to_ss(tensor_rot_i*scale)
+
+                bvals[i] = i_bval
+                bdeltas[i] = i_bdelta
+                b_etas[i] = i_b_eta
+
+            npt.assert_array_almost_equal(bvals, ebs)
+            npt.assert_array_almost_equal(bdeltas, expected_bdeltas)
+            npt.assert_array_almost_equal(b_etas, expected_b_etas)
+
+    # Input can't be string
+    npt.assert_raises(ValueError, btens_to_ss, 'LTE')
+
+    # Input can't be list of strings
+    npt.assert_raises(ValueError, btens_to_ss, ['LTE', 'LTE'])
+
+    # Input can't be 1D nor 4D
+    npt.assert_raises(ValueError, btens_to_ss, np.zeros((3,)))
+    npt.assert_raises(ValueError, btens_to_ss, np.zeros((3, 3, 3, 3)))
+
+    # Input shape must be (3, 3) OR (N, 3, 3)
+    npt.assert_raises(ValueError, btens_to_ss, np.zeros((4, 4)))
+    npt.assert_raises(ValueError, btens_to_ss, np.zeros((2, 2, 2)))
 
 if __name__ == "__main__":
     from numpy.testing import run_module_suite
